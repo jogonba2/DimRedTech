@@ -88,12 +88,77 @@ if(type=="PLA")
 	system("gnuplot PCALDA.gp");
 end	
 
+
+
+# PCA y LDA combinados método 2. Usar también en la competición #
+if(type=="PLM")
+    minPCA = 1;
+    maxPCA = 256; # Ajustar dimensiones PCA #
+    jump   = 10;
+    minOneDimPCA    = 0;
+    minTwoDimPCA    = 0;
+    minOneErrorPCA  = 100;
+    minTwoErrorPCA  = 100;
+    kk = 1;
+    # Calcular las 2 dimensiones de PCA que dan menor error (entre 0 y 256)
+    while minPCA<maxPCA
+		[avg,W] = pca(X,minPCA);
+		proyX   = W'*X;
+		proyY   = W'*Y;
+		err     = knn(proyX,xl,proyY,yl,kk);
+		if(err<minOneErrorPCA)
+			# Si el error es menor que el primer valor del intervalo, el menor anterior pasa a ser 
+			# el 2º menor y se actualiza el 1º menor
+			minTwoDimPCA = minOneDimPCA;
+		    minTwoErrorPCA = minOneErrorPCA;
+		    minOneDimPCA = minPCA;
+		    minOneErrorPCA = err;		    
+		else
+		    if(err<minTwoErrorPCA)
+		        minTwoDimPCA = minPCA;
+		        minTwoErrorPCA = err;
+		    end
+		end	 
+		if(minPCA+jump<maxPCA) minPCA = minPCA + jump;
+		else minPCA = minPCA + 1;
+		end
+		disp(minPCA);
+    endwhile
+    disp("Menor error 1: "),disp(minOneErrorPCA),disp(" en la dimension: "),disp(minOneDimPCA);
+    disp("Menor error 2: "),disp(minTwoErrorPCA),disp(" en la dimension: "),disp(minTwoDimPCA);
+    # Para cada valor entre las 2 dimensiones de menor error de PCA, calcular su error con proyección LDA #
+    dimPCA = 1;
+    dimLDA = 1;
+    menorError = 100;
+    while(minOneDimPCA<minTwoDimPCA)
+        for j=1:9 # Probar con nº de clases dimensiones de LDA (Ajustar dimensiones LDA AQUI)#
+	        [avg,WPCA]  = pca(X,minOneDimPCA);
+	        proyXPCA = WPCA'*X;
+	        proyYPCA = WPCA'*Y;
+	        WLDA     = lda(proyXPCA,xl,j);
+	        proyXLDA = WLDA'*proyXPCA;
+	        proyYLDA = WLDA'*proyYPCA;
+	        err      = knn(proyXLDA,xl,proyYLDA,yl,kk);
+	        #disp("Calculado"),disp(minOneDimPCA),disp(j),disp("con error: "),disp(err);
+	        if(err<menorError)
+	            dimPCA = minOneDimPCA;
+	            dimLDA = j;
+	            menorError = err;
+	            #disp("Menor error con: "),disp(dimPCA),disp(dimLDA),disp(" : "),disp(err)
+	        end   
+	    endfor
+	    minOneDimPCA = minOneDimPCA + 1;
+	endwhile
+    disp("Menor error con: "),disp(dimPCA),disp(dimLDA),disp(" : "),disp(menorError)
+end
+
 ## PCA Y LDA combinados (No son necesarios los 4 ultimos parametros), configurar a mano en la competicion ##
 ## Primero se aplica PCA proyectando hasta nº dimensiones de la imagen, después se aplica LDA sobre las 5 dimensiones que con PCA 
 ## den menor error ##
 if(type=="PLC")
 	minPCA     = 1;   # Ajustar dimension minima de PCA AQUI #
 	maxPCA     = 256; # Ajustar dimension maxima de PCA AQUI #
+	lenSet     = 10;
 	menoresErrorPCA = [];
 	menoresDimPCA   = [];
 	kk         = 1; # Configurar numero de vecinos del clasificador #
@@ -102,18 +167,18 @@ if(type=="PLC")
 		proyX   = W'*X;
 		proyY   = W'*Y;
 		err     = knn(proyX,xl,proyY,yl,kk);
-		if(minPCA<=5) # Coger las 5 dimensiones que den menor error con PCA #
+		if(minPCA<=lenSet) # Coger las lenSet dimensiones que den menor error con PCA #
 		    menoresErrorPCA(end+1) = err;
 		    menoresDimPCA(end+1) = minPCA;
 		else
 		    if(err<max(menoresErrorPCA))
-		        i = find(menoresErrorPCA==max(menoresErrorPCA));
+		        i = find(menoresErrorPCA==max(menoresErrorPCA))(1);
 		        menoresErrorPCA(i) = err;
 		        menoresDimPCA(i) = minPCA;
 		    end
 		end
 		minPCA = minPCA + 1;
-		#disp("Con error: "),disp(menoresErrorPCA),disp(" dimension: "),disp(menoresDimPCA)
+	#	disp("Con error: "),disp(menoresErrorPCA),disp(" dimension: "),disp(menoresDimPCA)
 	endwhile
 	disp("Menores con PCA ya calculados: "),disp(menoresDimPCA),disp(menoresErrorPCA)
 	# Calcular con los 5 menores de PCA el error con LDA y coger el menor #
@@ -123,7 +188,7 @@ if(type=="PLC")
 	menorError = 100;
 	dimPCA = 0;
 	dimLDA = 0;
-	for x=1:5 # Con las 5 dimensiones de PCA que dan menor error #
+	for x=1:lenSet # Con las lenSet dimensiones de PCA que dan menor error #
 	    for j=1:9 # Probar con nº de clases dimensiones de LDA (Ajustar dimensiones LDA AQUI)#
 	        [avg,WPCA]  = pca(X,menoresDimPCA(x));
 	        proyXPCA = WPCA'*X;
@@ -141,7 +206,7 @@ if(type=="PLC")
 	        end   
 	     endfor
 	endfor
-	disp("Menor error con: "),disp(dimPCA),disp(dimLDA),disp(" : "),disp(menorError)
+	disp("Menor error con: "),disp(menoresDimPCA(dimPCA)),disp(dimLDA),disp(" : "),disp(menorError)
 	fclose(fd); 
 end	
 	
